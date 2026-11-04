@@ -1,0 +1,47 @@
+:root {
+  color-scheme: light dark;
+  font: 1rem/1.55 system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+form, section {
+  border: 1px solid GrayText;
+  border-radius: .5rem;
+  padding: 1rem;
+}
+
+label {
+  display: flex;
+  align-items: flex-start;
+  gap: .45rem;
+}
+
+input {
+  margin: .35rem 0 0;
+}
+
+button {
+  margin-top: 1rem;
+  padding: .45rem 1rem;
+  font: inherit;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: .35rem 1rem;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

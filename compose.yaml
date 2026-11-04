@@ -1,0 +1,60 @@
+name: anyone-wasm
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - ./demo/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./demo/public:/srv:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [frontend]
+
+  wasm-snapshot:
+    build:
+      context: ./wasm-bridge
+      target: snapshot
+    platform: linux/amd64
+    environment:
+      ANYONE_ACCEPT_TERMS: ${ANYONE_ACCEPT_TERMS:-no}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if [ "$$ANYONE_ACCEPT_TERMS" != yes ]; then
+          echo "Set ANYONE_ACCEPT_TERMS=yes after reviewing the Anyone terms." >&2
+          exit 1
+        fi
+        exec tor-js-gateway --config /etc/anyone-wasm-snapshot.json run --no-mirror
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    volumes:
+      - wasm-directory:/state
+    networks: [uplink]
+
+  wasm-bridge:
+    build:
+      context: ./wasm-bridge
+      target: bridge
+    environment:
+      LAB_ORIGIN: https://localhost:8443
+    depends_on: [wasm-snapshot]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - wasm-directory:/state:ro
+    networks: [frontend, uplink]
+
+networks:
+  frontend:
+  uplink:
+
+volumes:
+  caddy-data:
+  caddy-config:
+  wasm-directory:

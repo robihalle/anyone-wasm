@@ -1,0 +1,54 @@
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
+
+const torJsPath = process.argv[2];
+if (!torJsPath) throw new Error('Pass the patched tor-js checkout.');
+const torJs = resolve(torJsPath);
+const require = createRequire(resolve(torJs, 'package.json'));
+const { build } = require('esbuild');
+const wasmDir = resolve(torJs, 'crates/tor-js-wasm/pkg-release');
+const artifacts = new URL('./artifacts/', import.meta.url);
+const bytes = await readFile(resolve(wasmDir, 'tor_js_bg.wasm'));
+const notices = await Promise.all([
+  readFile(resolve(torJs, 'LICENSE-MIT'), 'utf8'),
+  readFile(resolve(torJs, '../arti-browser/LICENSE-MIT'), 'utf8'),
+]);
+const hash = createHash('sha256').update(bytes).digest('hex');
+const integrity = 'sha256-' + Buffer.from(hash, 'hex').toString('base64');
+
+await mkdir(artifacts, { recursive: true });
+await writeFile(new URL('tor_js_bg.wasm', artifacts), bytes);
+await writeFile(new URL('tor_js_bg.wasm.gz', artifacts), gzipSync(bytes, { level: 9 }));
+await writeFile(new URL('tor_js_bg.wasm.br', artifacts), brotliCompressSync(bytes, {
+  params: { [constants.BROTLI_PARAM_QUALITY]: 11 },
+}));
+await build({
+  absWorkingDir: import.meta.dirname,
+  entryPoints: ['client.js', 'client-worker.js'],
+  outdir: 'artifacts',
+  bundle: true,
+  minify: true,
+  banner: { js: '/*! tor-js and Arti license notices\n' + notices.join('\n') + '*/' },
+  platform: 'browser',
+  format: 'esm',
+  target: 'es2022',
+  external: ['node:*', '@kpstreams/quic-client'],
+  define: {
+    __WASM_SHA256__: JSON.stringify(hash),
+    __WASM_INTEGRITY__: JSON.stringify(integrity),
+    __PACKAGE_VERSION__: JSON.stringify('anyone-wasm-demo'),
+  },
+  plugins: [{
+    name: 'patched-anyone-client',
+    setup(bundle) {
+      bundle.onResolve({ filter: /^#wasm$/ }, () => ({ path: resolve(wasmDir, 'tor_js.js') }));
+      bundle.onResolve({ filter: /^anyone-client\// }, args => ({
+        path: resolve(torJs, 'src', args.path.replace(/^anyone-client\//, '').replace(/\.js$/, '.ts')),
+      }));
+    },
+  }],
+});
+console.log('Anyone client WASM SHA-256:', hash);

@@ -1,0 +1,2 @@
+/scripts/*.sh text eol=lf
+/wasm-bridge/patches/*.patch text eol=lf
